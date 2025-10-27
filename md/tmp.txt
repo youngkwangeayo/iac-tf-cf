@@ -1,0 +1,10 @@
+brew install tfenv && tfenv install 1.9.5 && tfenv use 1.9.5
+
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+
+
+HashiCorp Terraform 익스텐션 다운
+
+
+Terraform은 “선언형 인프라 코드"

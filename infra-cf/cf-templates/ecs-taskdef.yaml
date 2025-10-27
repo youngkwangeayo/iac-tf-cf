@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Task Definition Template'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, prod, etc)
+
+  SolutionName:
+    Type: String
+    Description: Solution name (e.g., coffeezip, mys1)
+
+  ServiceName:
+    Type: String
+    Description: Service name (e.g., cms, api, web)
+
+  ContainerImage:
+    Type: String
+    Description: Docker image URI
+
+  ContainerPort:
+    Type: Number
+    Description: Container port
+    Default: 3849
+
+  CPU:
+    Type: String
+    Description: Task CPU units
+    Default: '512'
+    AllowedValues:
+      - '256'
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+
+  Memory:
+    Type: String
+    Description: Task memory (MB)
+    Default: '1024'
+    AllowedValues:
+      - '512'
+      - '1024'
+      - '2048'
+      - '4096'
+      - '8192'
+
+  TaskRoleArn:
+    Type: String
+    Description: IAM role ARN for task
+    Default: 'arn:aws:iam::365485194891:role/ecsTaskRole'
+
+  ExecutionRoleArn:
+    Type: String
+    Description: IAM role ARN for task execution
+    Default: 'arn:aws:iam::365485194891:role/ecsTaskExecutionRole'
+
+  HealthCheckPath:
+    Type: String
+    Description: Health check endpoint path
+    Default: '/api/ping'
+
+  HealthCheckInterval:
+    Type: Number
+    Description: Health check interval (seconds)
+    Default: 30
+
+  HealthCheckTimeout:
+    Type: Number
+    Description: Health check timeout (seconds)
+    Default: 5
+
+  HealthCheckRetries:
+    Type: Number
+    Description: Health check retries
+    Default: 2
+
+  HealthCheckStartPeriod:
+    Type: Number
+    Description: Health check start period (seconds)
+    Default: 90
+
+  StartTimeout:
+    Type: Number
+    Description: Container start timeout (seconds)
+    Default: 90
+
+  StopTimeout:
+    Type: Number
+    Description: Container stop timeout (seconds)
+    Default: 120
+
+  EnvironmentVariables:
+    Type: String
+    Description: JSON string of environment variables
+    Default: '[]'
+
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'task-${Environment}-${SolutionName}-${ServiceName}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref CPU
+      Memory: !Ref Memory
+      TaskRoleArn: !Ref TaskRoleArn
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: !Sub '${SolutionName}-${ServiceName}'
+          Image: !Ref ContainerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              HostPort: !Ref ContainerPort
+              Protocol: tcp
+              Name: !Sub '${SolutionName}-${ServiceName}-port'
+              AppProtocol: http
+          Environment: !If
+            - HasEnvironmentVariables
+            - !Ref EnvironmentVariables
+            - !Ref AWS::NoValue
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '/ecs/task-${Environment}-${SolutionName}-${ServiceName}'
+              awslogs-create-group: 'true'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - !Sub 'curl -f http://localhost:${ContainerPort}${HealthCheckPath} || exit 1'
+            Interval: !Ref HealthCheckInterval
+            Timeout: !Ref HealthCheckTimeout
+            Retries: !Ref HealthCheckRetries
+            StartPeriod: !Ref HealthCheckStartPeriod
+          StartTimeout: !Ref StartTimeout
+          StopTimeout: !Ref StopTimeout
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Solution
+          Value: !Ref SolutionName
+        - Key: Service
+          Value: !Ref ServiceName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Conditions:
+  HasEnvironmentVariables: !Not [!Equals [!Ref EnvironmentVariables, '[]']]
+
+Outputs:
+  TaskDefinitionArn:
+    Description: Task Definition ARN
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinitionArn'
+
+  TaskDefinitionFamily:
+    Description: Task Definition Family
+    Value: !Sub 'task-${Environment}-${SolutionName}-${ServiceName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinitionFamily'

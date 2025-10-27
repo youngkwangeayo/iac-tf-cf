@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Service Template'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, prod, etc)
+
+  SolutionName:
+    Type: String
+    Description: Solution name (e.g., coffeezip, mys1)
+
+  ServiceName:
+    Type: String
+    Description: Service name (e.g., cms, api, web)
+
+  ClusterStackName:
+    Type: String
+    Description: Cluster CloudFormation stack name
+
+  TaskDefinitionStackName:
+    Type: String
+    Description: Task Definition CloudFormation stack name
+
+  DesiredCount:
+    Type: Number
+    Description: Desired number of tasks
+    Default: 1
+
+  TargetGroupArn:
+    Type: String
+    Description: ALB Target Group ARN
+
+  ContainerName:
+    Type: String
+    Description: Container name
+
+  ContainerPort:
+    Type: Number
+    Description: Container port
+    Default: 3849
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: Subnet IDs for task placement
+
+  SecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: Security Group IDs for tasks
+
+  AssignPublicIp:
+    Type: String
+    Description: Assign public IP to tasks
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+
+  CapacityProvider:
+    Type: String
+    Description: Capacity provider
+    Default: FARGATE
+    AllowedValues:
+      - FARGATE
+      - FARGATE_SPOT
+
+  CapacityProviderWeight:
+    Type: Number
+    Description: Capacity provider weight
+    Default: 1
+
+  MaximumPercent:
+    Type: Number
+    Description: Maximum percent during deployment
+    Default: 200
+
+  MinimumHealthyPercent:
+    Type: Number
+    Description: Minimum healthy percent during deployment
+    Default: 100
+
+  DeploymentCircuitBreakerEnabled:
+    Type: String
+    Description: Enable deployment circuit breaker
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  DeploymentCircuitBreakerRollback:
+    Type: String
+    Description: Enable automatic rollback
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  HealthCheckGracePeriodSeconds:
+    Type: Number
+    Description: Health check grace period (seconds)
+    Default: 90
+
+  EnableExecuteCommand:
+    Type: String
+    Description: Enable ECS Exec
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Resources:
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub 'service-${Environment}-${SolutionName}-${ServiceName}'
+      Cluster:
+        Fn::ImportValue: !Sub '${ClusterStackName}-ClusterName'
+      TaskDefinition:
+        Fn::ImportValue: !Sub '${TaskDefinitionStackName}-TaskDefinitionArn'
+      DesiredCount: !Ref DesiredCount
+      LaunchType: !Ref AWS::NoValue
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref CapacityProvider
+          Weight: !Ref CapacityProviderWeight
+          Base: 0
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          SecurityGroups: !Ref SecurityGroupIds
+          AssignPublicIp: !Ref AssignPublicIp
+      LoadBalancers:
+        - TargetGroupArn: !Ref TargetGroupArn
+          ContainerName: !Ref ContainerName
+          ContainerPort: !Ref ContainerPort
+      DeploymentConfiguration:
+        MaximumPercent: !Ref MaximumPercent
+        MinimumHealthyPercent: !Ref MinimumHealthyPercent
+        DeploymentCircuitBreaker:
+          Enable: !Ref DeploymentCircuitBreakerEnabled
+          Rollback: !Ref DeploymentCircuitBreakerRollback
+      HealthCheckGracePeriodSeconds: !Ref HealthCheckGracePeriodSeconds
+      SchedulingStrategy: REPLICA
+      PlatformVersion: LATEST
+      EnableExecuteCommand: !Ref EnableExecuteCommand
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Solution
+          Value: !Ref SolutionName
+        - Key: Service
+          Value: !Ref ServiceName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  ServiceName:
+    Description: ECS Service Name
+    Value: !GetAtt ECSService.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceName'
+
+  ServiceArn:
+    Description: ECS Service ARN
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceArn'

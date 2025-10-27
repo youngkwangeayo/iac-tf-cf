@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Service Auto Scaling Template'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, prod, etc)
+
+  SolutionName:
+    Type: String
+    Description: Solution name (e.g., coffeezip, mys1)
+
+  ServiceName:
+    Type: String
+    Description: Service name (e.g., cms, api, web)
+
+  ClusterStackName:
+    Type: String
+    Description: Cluster CloudFormation stack name
+
+  ServiceStackName:
+    Type: String
+    Description: Service CloudFormation stack name
+
+  MinCapacity:
+    Type: Number
+    Description: Minimum number of tasks
+    Default: 1
+
+  MaxCapacity:
+    Type: Number
+    Description: Maximum number of tasks
+    Default: 3
+
+  TargetCPUUtilization:
+    Type: Number
+    Description: Target CPU utilization percentage
+    Default: 70
+
+  ScaleInCooldown:
+    Type: Number
+    Description: Scale in cooldown period (seconds)
+    Default: 120
+
+  ScaleOutCooldown:
+    Type: Number
+    Description: Scale out cooldown period (seconds)
+    Default: 60
+
+  DisableScaleIn:
+    Type: String
+    Description: Disable scale in
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Resources:
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ResourceId: !Sub
+        - 'service/${ClusterName}/${ServiceName}'
+        - ClusterName:
+            Fn::ImportValue: !Sub '${ClusterStackName}-ClusterName'
+          ServiceName:
+            Fn::ImportValue: !Sub '${ServiceStackName}-ServiceName'
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: !Ref MinCapacity
+      MaxCapacity: !Ref MaxCapacity
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub 'autoScale-${Environment}-${SolutionName}-${ServiceName}'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: !Ref TargetCPUUtilization
+        ScaleInCooldown: !Ref ScaleInCooldown
+        ScaleOutCooldown: !Ref ScaleOutCooldown
+        DisableScaleIn: !Ref DisableScaleIn
+
+Outputs:
+  ScalableTargetId:
+    Description: Scalable Target ID
+    Value: !Ref ScalableTarget
+    Export:
+      Name: !Sub '${AWS::StackName}-ScalableTargetId'
+
+  ScalingPolicyArn:
+    Description: Scaling Policy ARN
+    Value: !Ref ScalingPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-ScalingPolicyArn'

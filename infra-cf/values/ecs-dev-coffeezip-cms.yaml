@@ -1,0 +1,88 @@
+# ECS Configuration for dev-example-cms
+# Usage:
+#   aws cloudformation create-stack --stack-name ecs-cluster-dev-example \
+#       --template-body file://cf-templates/ecs-cluster.yaml \
+#       --parameters file://values/ecs-dev-example-cms.yaml
+
+# Cluster Parameters
+Cluster:
+  Environment: dev
+  SolutionName: example
+  CapacityProviders: "FARGATE,FARGATE_SPOT"
+
+# Task Definition Parameters
+TaskDefinition:
+  Environment: dev
+  SolutionName: example
+  ServiceName: cms
+  ContainerImage: 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/example/example-cms:0.9.26-dev-33
+  ContainerPort: 3849
+  CPU: '512'
+  Memory: '1024'
+  TaskRoleArn: arn:aws:iam::123456789012:role/ecsTaskRole
+  ExecutionRoleArn: arn:aws:iam::123456789012:role/ecsTaskExecutionRole
+  HealthCheckPath: /api/ping
+  HealthCheckInterval: 30
+  HealthCheckTimeout: 5
+  HealthCheckRetries: 2
+  HealthCheckStartPeriod: 90
+  StartTimeout: 90
+  StopTimeout: 120
+  EnvironmentVariables: |
+    [
+      {"name": "NODE_ENV", "value": "dev"},
+      {"name": "PORT", "value": "3849"},
+      {"name": "DATABASE_URL", "value": "mysql://admin:MASKED_PASSWORD@cms-db-dev.global-xxxxxxxx.global.rds.amazonaws.com:3306/example?connection_limit=5&spool_timeout=0"},
+      {"name": "DATABASE_REPLICA_URL", "value": "mysql://admin:MASKED_PASSWORD@cms-db-dev-cluster.cluster-ro-xxxxxxxx.ap-northeast-2.rds.amazonaws.com:3306/example"},
+      {"name": "REDIS_URL", "value": "redis://cms-dev-redis.xxxxxx.clustercfg.apn2.cache1.amazonaws.com:6379"},
+      {"name": "JWT_SECRET", "value": "MASKED_SECRET"},
+      {"name": "JWT_EXPIRES_IN", "value": "24h"},
+      {"name": "BCRYPT_ROUNDS", "value": "12"},
+      {"name": "RATE_LIMIT_MAX", "value": "100"},
+      {"name": "RATE_LIMIT_WRITE_MAX", "value": "50"},
+      {"name": "MAX_REQUEST_SIZE", "value": "5242880"},
+      {"name": "LOG_LEVEL", "value": "info"},
+      {"name": "LOG_DIR", "value": "./logs"},
+      {"name": "LOG_RETENTION_DAYS", "value": "30"},
+      {"name": "SECURE_MODE", "value": "false"},
+      {"name": "CMS_URL", "value": "https://dev.example.com"},
+      {"name": "EXAMPLE_URL", "value": "https://example-dev.example.com"},
+      {"name": "EXAMPLE_CMS_IOT_URL", "value": "https://example-cms-iot-dev.example.com"}
+    ]
+
+# Service Parameters
+Service:
+  Environment: dev
+  SolutionName: example
+  ServiceName: cms
+  ClusterStackName: ecs-cluster-dev-example
+  TaskDefinitionStackName: ecs-taskdef-dev-example-cms
+  DesiredCount: 1
+  TargetGroupArn: arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/group-dev-example-cms/9d8d0b6852b1bdd3
+  ContainerName: example-cms
+  ContainerPort: 3849
+  SubnetIds: "subnet-xxxxxxxxxxxxxxxx1,subnet-xxxxxxxxxxxxxxxx2,subnet-xxxxxxxxxxxxxxxx3"
+  SecurityGroupIds: "sg-xxxxxxxxxxxxxxxx1,sg-xxxxxxxx2,sg-xxxxxxxxxxxxxxxx3"
+  AssignPublicIp: ENABLED
+  CapacityProvider: FARGATE
+  CapacityProviderWeight: 1
+  MaximumPercent: 200
+  MinimumHealthyPercent: 100
+  DeploymentCircuitBreakerEnabled: 'true'
+  DeploymentCircuitBreakerRollback: 'true'
+  HealthCheckGracePeriodSeconds: 90
+  EnableExecuteCommand: 'true'
+
+# Auto Scaling Parameters
+AutoScaling:
+  Environment: dev
+  SolutionName: example
+  ServiceName: cms
+  ClusterStackName: ecs-cluster-dev-example
+  ServiceStackName: ecs-service-dev-example-cms
+  MinCapacity: 1
+  MaxCapacity: 3
+  TargetCPUUtilization: 70
+  ScaleInCooldown: 120
+  ScaleOutCooldown: 60
+  DisableScaleIn: 'false'

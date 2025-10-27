@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Fargate Cluster Template'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, prod, etc)
+    AllowedValues:
+      - dev
+      - prod
+      - staging
+
+  SolutionName:
+    Type: String
+    Description: Solution name (e.g., coffeezip, mys1)
+
+  CapacityProviders:
+    Type: CommaDelimitedList
+    Description: Capacity providers for the cluster
+    Default: "FARGATE,FARGATE_SPOT"
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'ecs-${Environment}-${SolutionName}'
+      CapacityProviders: !Ref CapacityProviders
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Solution
+          Value: !Ref SolutionName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  ClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+
+  ClusterArn:
+    Description: ECS Cluster ARN
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterArn'
